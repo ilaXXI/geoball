@@ -26,6 +26,12 @@ docker run --rm -p 8001:8000 geoball-catalog:0.1
 
 Documentation : http://127.0.0.1:8001/docs
 
+L'image est aussi disponible sur [Docker Hub](https://hub.docker.com/r/gabriel0langlois/geoball-catalog) :
+
+```powershell
+docker run --rm -p 8001:8000 gabriel0langlois/geoball-catalog:0.1
+```
+
 ## Tests
 
 ```powershell
