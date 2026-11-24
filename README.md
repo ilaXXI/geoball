@@ -3,7 +3,7 @@
 Projet de quiz géographique en Python / FastAPI pour les cours de Cloud Integration
 et de DevOps.
 
-Pour l'instant : une API de catalogue avec sept pays et leurs capitales.
+Deux services : un catalogue de sept pays et un [quiz sur les capitales](services/quiz/README.md).
 
 ## Lancement local (PowerShell)
 
@@ -38,6 +38,7 @@ docker run --rm -p 8001:8000 gabriel0langlois/geoball-catalog:0.1
 minikube start --driver=docker
 kubectl --context=minikube --namespace=default apply -f k8s/
 kubectl --context=minikube --namespace=default rollout status deployment/geoball-catalog
+kubectl --context=minikube --namespace=default rollout status deployment/geoball-quiz
 minikube service geoball-catalog --url
 ```
 
@@ -46,9 +47,12 @@ Ajouter `/docs` à l'URL affichée. Garder le terminal ouvert si Minikube utilis
 ## Service mesh
 
 Installation et accès via la gateway : [Istio](k8s/istio/README.md).
+Le catalogue est accessible sur `/countries` et le quiz sur `/quizzes`.
+Documentation du quiz via la gateway : http://127.0.0.1:31380/quizzes/docs.
 
 ## Tests
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest services/catalog/tests --import-mode=importlib -o pythonpath=services/catalog
+.\.venv\Scripts\python.exe -m pytest services/quiz/tests --import-mode=importlib -o pythonpath=services/quiz
 ```

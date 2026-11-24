@@ -10,6 +10,16 @@ spec:
   http:
     - match:
         - uri:
+            exact: /quizzes
+        - uri:
+            prefix: /quizzes/
+      route:
+        - destination:
+            host: geoball-quiz
+            port:
+              number: 8000
+    - match:
+        - uri:
             prefix: /
       route:
         - destination:

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: geoball-quiz
+  labels:
+    app: geoball-quiz
+spec:
+  selector:
+    app: geoball-quiz
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

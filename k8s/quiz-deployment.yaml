@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geoball-quiz
+  labels:
+    app: geoball-quiz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: geoball-quiz
+  template:
+    metadata:
+      labels:
+        app: geoball-quiz
+        version: "0.1"
+    spec:
+      containers:
+        - name: geoball-quiz
+          image: gabriel0langlois/geoball-quiz:0.1
+          env:
+            - name: CATALOG_URL
+              value: http://geoball-catalog:8000
+          ports:
+            - containerPort: 8000
