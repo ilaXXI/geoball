@@ -1,0 +1,9 @@
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: geoball-tracing
+spec:
+  tracing:
+    - providers:
+        - name: jaeger
+      randomSamplingPercentage: 100

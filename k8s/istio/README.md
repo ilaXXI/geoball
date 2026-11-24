@@ -61,4 +61,4 @@ avec `kubectl apply -f k8s/` ou `kubectl apply -f k8s/istio/`.
 Essai réalisé avec 200 appels et 40 threads : 200 succès avant, 25 succès et
 175 réponses 503 avec la règle, puis 200 succès après sa suppression.
 
-Les outils de supervision du TP ne sont pas encore installés.
+Installation et accès aux outils du TP : [supervision](../observability/README.md).
