@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geoball-catalog
+  labels:
+    app: geoball-catalog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: geoball-catalog
+  template:
+    metadata:
+      labels:
+        app: geoball-catalog
+    spec:
+      containers:
+        - name: geoball-catalog
+          image: gabriel0langlois/geoball-catalog:0.1
+          ports:
+            - containerPort: 8000
