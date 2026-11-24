@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         app: geoball-catalog
+        version: "0.1"
     spec:
       containers:
         - name: geoball-catalog

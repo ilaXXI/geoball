@@ -43,6 +43,10 @@ minikube service geoball-catalog --url
 
 Ajouter `/docs` à l'URL affichée. Garder le terminal ouvert si Minikube utilise un tunnel.
 
+## Service mesh
+
+Installation et accès via la gateway : [Istio](k8s/istio/README.md).
+
 ## Tests
 
 ```powershell

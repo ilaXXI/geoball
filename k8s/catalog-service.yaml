@@ -9,5 +9,6 @@ spec:
   selector:
     app: geoball-catalog
   ports:
-    - port: 8000
+    - name: http
+      port: 8000
       targetPort: 8000
