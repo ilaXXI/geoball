@@ -60,3 +60,9 @@ Documentation du quiz via la gateway : http://127.0.0.1:31380/quizzes/docs.
 .\.venv\Scripts\python.exe -m pytest services/catalog/tests --import-mode=importlib -o pythonpath=services/catalog
 .\.venv\Scripts\python.exe -m pytest services/quiz/tests --import-mode=importlib -o pythonpath=services/quiz
 ```
+
+## DevOps
+
+Tests et qualité : `python scripts/course.py verify` après installation des
+dépendances de développement des deux services.
+[TP 01 et vérifications GitHub](docs/tp01.md).

@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-
 client = TestClient(app)
 
 
@@ -18,10 +17,7 @@ def test_list_countries():
     countries = response.json()
     assert countries
     assert len({country["code"] for country in countries}) == len(countries)
-    assert all(
-        {"code", "name", "capital", "continent"} == set(country)
-        for country in countries
-    )
+    assert all({"code", "name", "capital", "continent"} == set(country) for country in countries)
 
 
 def test_get_country():

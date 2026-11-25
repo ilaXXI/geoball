@@ -2,7 +2,7 @@ import os
 from functools import lru_cache
 from uuid import uuid4
 
-from sqlalchemy import JSON, ForeignKey, String, URL, create_engine
+from sqlalchemy import JSON, URL, ForeignKey, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
 
@@ -13,9 +13,7 @@ class Base(DeclarativeBase):
 class Quiz(Base):
     __tablename__ = "quizzes"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     questions: Mapped[list["Question"]] = relationship(
         cascade="all, delete-orphan", order_by="Question.position"
     )
@@ -32,9 +30,7 @@ class Quiz(Base):
 class Question(Base):
     __tablename__ = "questions"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     quiz_id: Mapped[str] = mapped_column(ForeignKey("quizzes.id"), index=True)
     position: Mapped[int]
     country: Mapped[str]
