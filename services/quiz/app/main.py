@@ -1,12 +1,18 @@
 import os
 import random
-from dataclasses import dataclass, field
-from threading import Lock
-from uuid import UUID, uuid4
+from contextlib import asynccontextmanager
+from uuid import UUID
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select, text, update
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app import database
+from app.database import Question, Quiz, get_session
 
 
 class Country(BaseModel):
@@ -73,110 +79,123 @@ class AnswerResult(BaseModel):
     finished: bool
 
 
-@dataclass
-class Question:
-    country: str
-    choices: list[str]
-    correct_answer: str
-    id: UUID = field(default_factory=uuid4)
-    answer: str | None = None
+def quiz_view(quiz: Quiz):
+    return QuizView(
+        id=quiz.id,
+        questions=[
+            QuestionView(
+                id=question.id,
+                country=question.country,
+                choices=question.choices,
+                answered=question.answer is not None,
+            )
+            for question in quiz.questions
+        ],
+        score=quiz.score,
+        finished=quiz.finished,
+    )
 
 
-@dataclass
-class Quiz:
-    questions: list[Question]
-    id: UUID = field(default_factory=uuid4)
-
-    @property
-    def score(self):
-        return sum(question.answer == question.correct_answer for question in self.questions)
-
-    @property
-    def finished(self):
-        return all(question.answer is not None for question in self.questions)
-
-    def view(self):
-        return QuizView(
-            id=self.id,
-            questions=[
-                QuestionView(
-                    id=question.id,
-                    country=question.country,
-                    choices=question.choices,
-                    answered=question.answer is not None,
-                )
-                for question in self.questions
-            ],
-            score=self.score,
-            finished=self.finished,
-        )
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    engine = database.get_engine()
+    # Première version du schéma ; create_all ne remplace pas des migrations.
+    database.Base.metadata.create_all(engine)
+    try:
+        yield
+    finally:
+        engine.dispose()
 
 
-# Stockage temporaire : un seul processus et une seule réplique du service.
-quizzes: dict[UUID, Quiz] = {}
-quiz_lock = Lock()
 app = FastAPI(
     title="GeoBall — Quiz",
     docs_url="/quizzes/docs",
     openapi_url="/quizzes/openapi.json",
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 
+@app.exception_handler(SQLAlchemyError)
+async def database_error(request: Request, error: SQLAlchemyError):
+    return JSONResponse(status_code=503, content={"detail": "Base de données indisponible"})
+
+
 @app.get("/quizzes/health")
-def health() -> dict[str, str]:
+def health(session: Session = Depends(get_session)) -> dict[str, str]:
+    session.execute(text("SELECT 1"))
     return {"status": "ok"}
 
 
 @app.post("/quizzes", response_model=QuizView, status_code=201)
-def create_quiz(request: CreateQuiz, countries: list[Country] = Depends(get_countries)):
+def create_quiz(
+    request: CreateQuiz,
+    countries: list[Country] = Depends(get_countries),
+    session: Session = Depends(get_session),
+):
     if request.number_of_questions > len(countries):
         raise HTTPException(status_code=400, detail="Pas assez de pays dans le catalogue")
 
     capitals = sorted({country.capital for country in countries})
     questions = []
-    for country in random.sample(countries, request.number_of_questions):
+    for position, country in enumerate(random.sample(countries, request.number_of_questions)):
         choices = random.sample(
             [capital for capital in capitals if capital != country.capital], 3
         )
         choices.append(country.capital)
         random.shuffle(choices)
-        questions.append(Question(country.name, choices, country.capital))
+        questions.append(Question(
+            country=country.name,
+            choices=choices,
+            correct_answer=country.capital,
+            position=position,
+        ))
 
-    quiz = Quiz(questions)
-    with quiz_lock:
-        quizzes[quiz.id] = quiz
-        return quiz.view()
+    quiz = Quiz(questions=questions)
+    session.add(quiz)
+    session.commit()
+    return quiz_view(quiz)
 
 
 @app.get("/quizzes/{quiz_id}", response_model=QuizView)
-def get_quiz(quiz_id: UUID):
-    with quiz_lock:
-        quiz = quizzes.get(quiz_id)
-        if quiz is None:
-            raise HTTPException(status_code=404, detail="Partie introuvable")
-        return quiz.view()
+def get_quiz(quiz_id: UUID, session: Session = Depends(get_session)):
+    quiz = session.get(Quiz, str(quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Partie introuvable")
+    return quiz_view(quiz)
 
 
 @app.post("/quizzes/{quiz_id}/answers", response_model=AnswerResult)
-def answer_question(quiz_id: UUID, answer: Answer):
-    with quiz_lock:
-        quiz = quizzes.get(quiz_id)
-        if quiz is None:
-            raise HTTPException(status_code=404, detail="Partie introuvable")
-        question = next(
-            (question for question in quiz.questions if question.id == answer.question_id),
-            None,
-        )
-        if question is None:
-            raise HTTPException(status_code=404, detail="Question introuvable")
-        if question.answer is not None:
-            raise HTTPException(status_code=409, detail="Question déjà répondue")
-        if answer.choice not in question.choices:
-            raise HTTPException(status_code=400, detail="Choix invalide")
-        question.answer = answer.choice
-        return AnswerResult(
-            correct=question.answer == question.correct_answer,
-            score=quiz.score,
-            finished=quiz.finished,
-        )
+def answer_question(
+    quiz_id: UUID, answer: Answer, session: Session = Depends(get_session)
+):
+    # Sérialiser les réponses d'une partie, même entre plusieurs processus.
+    quiz = session.scalar(
+        select(Quiz).where(Quiz.id == str(quiz_id)).with_for_update()
+    )
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Partie introuvable")
+    question = next(
+        (question for question in quiz.questions if question.id == str(answer.question_id)),
+        None,
+    )
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question introuvable")
+    if question.answer is not None:
+        raise HTTPException(status_code=409, detail="Question déjà répondue")
+    if answer.choice not in question.choices:
+        raise HTTPException(status_code=400, detail="Choix invalide")
+    updated = session.execute(
+        update(Question)
+        .where(Question.id == question.id, Question.answer.is_(None))
+        .values(answer=answer.choice)
+    )
+    if updated.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Question déjà répondue")
+    result = AnswerResult(
+        correct=answer.choice == question.correct_answer,
+        score=quiz.score,
+        finished=quiz.finished,
+    )
+    session.commit()
+    return result

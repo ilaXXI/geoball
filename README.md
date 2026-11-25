@@ -36,6 +36,9 @@ docker run --rm -p 8001:8000 gabriel0langlois/geoball-catalog:0.1
 
 ```powershell
 minikube start --driver=docker
+python scripts/create_db_secret.py
+kubectl --context=minikube --namespace=default apply -f k8s/postgres.yaml
+kubectl --context=minikube --namespace=default rollout status deployment/geoball-postgres
 kubectl --context=minikube --namespace=default apply -f k8s/
 kubectl --context=minikube --namespace=default rollout status deployment/geoball-catalog
 kubectl --context=minikube --namespace=default rollout status deployment/geoball-quiz
@@ -43,6 +46,7 @@ minikube service geoball-catalog --url
 ```
 
 Ajouter `/docs` à l'URL affichée. Garder le terminal ouvert si Minikube utilise un tunnel.
+Les parties sont sauvegardées dans [PostgreSQL](k8s/database.md).
 
 ## Service mesh
 

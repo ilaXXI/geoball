@@ -4,9 +4,12 @@ from uuid import uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session
 from starlette.requests import Request
 
-from app.main import Country, app, get_countries, quizzes
+from app import database
+from app.main import Country, app, get_countries
 
 
 COUNTRIES = [
@@ -20,13 +23,23 @@ CAPITALS = {country.name: country.capital for country in COUNTRIES}
 
 
 @pytest.fixture
-def client():
-    quizzes.clear()
+def engine(tmp_path, monkeypatch):
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'quiz.db'}", connect_args={"check_same_thread": False}
+    )
+    monkeypatch.setattr(database, "get_engine", lambda: engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def client(engine):
     app.dependency_overrides[get_countries] = lambda: COUNTRIES
-    with TestClient(app) as client:
-        yield client
-    app.dependency_overrides.clear()
-    quizzes.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
 
 def create(client, count=3):
@@ -116,7 +129,7 @@ def test_not_enough_countries(client):
 
 
 @pytest.mark.parametrize("failure", ["timeout", "http", "json", "incomplete"])
-def test_catalog_failure(client, monkeypatch, failure):
+def test_catalog_failure(client, engine, monkeypatch, failure):
     app.dependency_overrides.clear()
 
     def fake_get(url, timeout, headers):
@@ -134,7 +147,8 @@ def test_catalog_failure(client, monkeypatch, failure):
     monkeypatch.setattr(httpx, "get", fake_get)
     response = client.post("/quizzes", json={})
     assert response.status_code == 503
-    assert not quizzes
+    with Session(engine) as session:
+        assert session.scalar(select(func.count()).select_from(database.Quiz)) == 0
 
 
 def test_catalog_call_and_configuration(monkeypatch):
@@ -173,3 +187,51 @@ def test_catalog_cannot_provide_a_qcm(client, monkeypatch, countries):
         ),
     )
     assert client.post("/quizzes", json={}).status_code == 503
+
+
+def test_game_survives_an_application_restart(engine):
+    app.dependency_overrides[get_countries] = lambda: COUNTRIES
+    try:
+        with TestClient(app) as first:
+            quiz = create(first, 2)
+            question = quiz["questions"][0]
+            response = first.post(
+                f"/quizzes/{quiz['id']}/answers",
+                json={
+                    "question_id": question["id"],
+                    "choice": CAPITALS[question["country"]],
+                },
+            )
+            assert response.json()["score"] == 1
+        # Fermer puis rouvrir l'application et ses connexions, sans effacer la base.
+        with TestClient(app) as second:
+            state = second.get(f"/quizzes/{quiz['id']}").json()
+            assert state["score"] == 1
+            assert state["finished"] is False
+            assert [q["id"] for q in state["questions"]] == [
+                q["id"] for q in quiz["questions"]
+            ]
+            assert state["questions"][0]["answered"] is True
+            question = state["questions"][1]
+            response = second.post(
+                f"/quizzes/{quiz['id']}/answers",
+                json={
+                    "question_id": question["id"],
+                    "choice": CAPITALS[question["country"]],
+                },
+            )
+            assert response.json() == {"correct": True, "score": 2, "finished": True}
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_database_unavailable_returns_503(client, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    def unavailable():
+        raise OperationalError("connexion", {}, Exception("indisponible"))
+
+    app.dependency_overrides[database.get_session] = unavailable
+    response = client.get("/quizzes/health")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Base de données indisponible"}
