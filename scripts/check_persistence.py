@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
-
 KUBECTL = ["kubectl", "--context=minikube", "--namespace=default"]
 
 
@@ -87,9 +86,7 @@ def main():
         body = {"question_id": question["id"], "choice": capitals[question["country"]]}
         url = f"/quizzes/{race['id']}/answers"
         with ThreadPoolExecutor(max_workers=8) as pool:
-            statuses = list(pool.map(
-                lambda _: client.post(url, json=body).status_code, range(8)
-            ))
+            statuses = list(pool.map(lambda _: client.post(url, json=body).status_code, range(8)))
         assert statuses.count(200) == 1 and statuses.count(409) == 7, statuses
         response = client.get(f"/quizzes/{race['id']}")
         response.raise_for_status()

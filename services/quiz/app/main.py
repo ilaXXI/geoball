@@ -27,9 +27,15 @@ def get_countries(request: Request) -> list[Country]:
     trace_headers = {
         name: request.headers[name]
         for name in (
-            "x-request-id", "traceparent", "tracestate", "b3",
-            "x-b3-traceid", "x-b3-spanid", "x-b3-parentspanid",
-            "x-b3-sampled", "x-b3-flags",
+            "x-request-id",
+            "traceparent",
+            "tracestate",
+            "b3",
+            "x-b3-traceid",
+            "x-b3-spanid",
+            "x-b3-parentspanid",
+            "x-b3-sampled",
+            "x-b3-flags",
         )
         if name in request.headers
     }
@@ -139,17 +145,17 @@ def create_quiz(
     capitals = sorted({country.capital for country in countries})
     questions = []
     for position, country in enumerate(random.sample(countries, request.number_of_questions)):
-        choices = random.sample(
-            [capital for capital in capitals if capital != country.capital], 3
-        )
+        choices = random.sample([capital for capital in capitals if capital != country.capital], 3)
         choices.append(country.capital)
         random.shuffle(choices)
-        questions.append(Question(
-            country=country.name,
-            choices=choices,
-            correct_answer=country.capital,
-            position=position,
-        ))
+        questions.append(
+            Question(
+                country=country.name,
+                choices=choices,
+                correct_answer=country.capital,
+                position=position,
+            )
+        )
 
     quiz = Quiz(questions=questions)
     session.add(quiz)
@@ -166,13 +172,9 @@ def get_quiz(quiz_id: UUID, session: Session = Depends(get_session)):
 
 
 @app.post("/quizzes/{quiz_id}/answers", response_model=AnswerResult)
-def answer_question(
-    quiz_id: UUID, answer: Answer, session: Session = Depends(get_session)
-):
+def answer_question(quiz_id: UUID, answer: Answer, session: Session = Depends(get_session)):
     # Sérialiser les réponses d'une partie, même entre plusieurs processus.
-    quiz = session.scalar(
-        select(Quiz).where(Quiz.id == str(quiz_id)).with_for_update()
-    )
+    quiz = session.scalar(select(Quiz).where(Quiz.id == str(quiz_id)).with_for_update())
     if quiz is None:
         raise HTTPException(status_code=404, detail="Partie introuvable")
     question = next(

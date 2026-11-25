@@ -11,7 +11,6 @@ from starlette.requests import Request
 from app import database
 from app.main import Country, app, get_countries
 
-
 COUNTRIES = [
     Country(code="FR", name="France", capital="Paris"),
     Country(code="JP", name="Japon", capital="Tokyo"),
@@ -71,8 +70,10 @@ def test_score_and_end_of_game(client):
     quiz = create(client, 2)
     for index, question in enumerate(quiz["questions"]):
         correct = CAPITALS[question["country"]]
-        choice = correct if index == 0 else next(
-            choice for choice in question["choices"] if choice != correct
+        choice = (
+            correct
+            if index == 0
+            else next(choice for choice in question["choices"] if choice != correct)
         )
         response = client.post(
             f"/quizzes/{quiz['id']}/answers",
@@ -164,13 +165,15 @@ def test_catalog_call_and_configuration(monkeypatch):
         )
 
     monkeypatch.setattr(httpx, "get", fake_get)
-    request = Request({
-        "type": "http",
-        "headers": [
-            (b"traceparent", b"00-0123456789abcdef0123456789abcdef-0123456789abcdef-01"),
-            (b"authorization", b"ne-pas-transmettre"),
-        ],
-    })
+    request = Request(
+        {
+            "type": "http",
+            "headers": [
+                (b"traceparent", b"00-0123456789abcdef0123456789abcdef-0123456789abcdef-01"),
+                (b"authorization", b"ne-pas-transmettre"),
+            ],
+        }
+    )
     assert get_countries(request) == COUNTRIES
 
 
@@ -208,9 +211,7 @@ def test_game_survives_an_application_restart(engine):
             state = second.get(f"/quizzes/{quiz['id']}").json()
             assert state["score"] == 1
             assert state["finished"] is False
-            assert [q["id"] for q in state["questions"]] == [
-                q["id"] for q in quiz["questions"]
-            ]
+            assert [q["id"] for q in state["questions"]] == [q["id"] for q in quiz["questions"]]
             assert state["questions"][0]["answered"] is True
             question = state["questions"][1]
             response = second.post(
